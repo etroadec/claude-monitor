@@ -6,6 +6,7 @@ protocol PopoverViewDelegate: AnyObject {
     func popoverDidRequestConnect()
     func popoverDidRequestQuit()
     func popoverDidOpenIncident(link: String)
+    func popoverDidRequestUpdate()
 }
 
 class PopoverView: NSView {
@@ -19,6 +20,7 @@ class PopoverView: NSView {
     private var notifView: NotifTabView!
     private let bottomBar = NSView()
     private let refreshBtn = LinkButton(title: "Rafraîchir")
+    private let updateBtn = LinkButton(title: "Mise à jour")
     private let disconnectBtn = LinkButton(title: "Déconnecter")
     private let connectBtn = LinkButton(title: "Connecter mon compte Claude")
     private let quitBtn = LinkButton(title: "Quitter")
@@ -71,6 +73,8 @@ class PopoverView: NSView {
 
         refreshBtn.target = self
         refreshBtn.action = #selector(refreshClicked)
+        updateBtn.target = self
+        updateBtn.action = #selector(updateClicked)
         disconnectBtn.target = self
         disconnectBtn.action = #selector(disconnectClicked)
         connectBtn.target = self
@@ -79,6 +83,7 @@ class PopoverView: NSView {
         quitBtn.action = #selector(quitClicked)
 
         bottomBar.addSubview(refreshBtn)
+        bottomBar.addSubview(updateBtn)
         bottomBar.addSubview(disconnectBtn)
         bottomBar.addSubview(connectBtn)
         bottomBar.addSubview(quitBtn)
@@ -125,7 +130,7 @@ class PopoverView: NSView {
         let y: CGFloat = (h - 16) / 2
 
         // Evenly space all visible buttons
-        let allBtns = [refreshBtn, connectBtn, disconnectBtn, quitBtn].filter { !$0.isHidden }
+        let allBtns = [refreshBtn, updateBtn, connectBtn, disconnectBtn, quitBtn].filter { !$0.isHidden }
         for btn in allBtns { btn.sizeToFit() }
         let totalW = allBtns.reduce(CGFloat(0)) { $0 + $1.frame.width }
         let spacing = (w - totalW - 24) / max(CGFloat(allBtns.count - 1), 1)
@@ -165,6 +170,7 @@ class PopoverView: NSView {
         selectTab(sender.tag)
     }
     @objc private func refreshClicked() { delegate?.popoverDidRequestRefresh() }
+    @objc private func updateClicked() { delegate?.popoverDidRequestUpdate() }
     @objc private func disconnectClicked() { delegate?.popoverDidRequestDisconnect() }
     @objc private func connectClicked() { delegate?.popoverDidRequestConnect() }
     @objc private func quitClicked() { delegate?.popoverDidRequestQuit() }

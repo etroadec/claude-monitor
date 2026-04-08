@@ -273,4 +273,61 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
             NSWorkspace.shared.open(url)
         }
     }
+
+    func popoverDidRequestUpdate() {
+        checkForUpdate()
+    }
+
+    // MARK: - Update check
+
+    private static let currentVersion = "1.2.0"
+    private static let releasesAPI = "https://api.github.com/repos/etroadec/claude-monitor/releases/latest"
+
+    private func checkForUpdate() {
+        guard let url = URL(string: AppDelegate.releasesAPI) else { return }
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+
+        URLSession.shared.dataTask(with: request) { data, _, _ in
+            guard let data = data,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let tagName = json["tag_name"] as? String else {
+                DispatchQueue.main.async {
+                    self.showUpdateAlert(message: "Impossible de vérifier les mises à jour.")
+                }
+                return
+            }
+
+            let remoteVersion = tagName.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
+            let isNew = remoteVersion.compare(AppDelegate.currentVersion, options: .numeric) == .orderedDescending
+
+            DispatchQueue.main.async {
+                if isNew {
+                    let htmlURL = json["html_url"] as? String ?? "https://github.com/etroadec/claude-monitor/releases/latest"
+                    let alert = NSAlert()
+                    alert.messageText = "Mise à jour disponible"
+                    alert.informativeText = "Version \(remoteVersion) disponible (actuelle: \(AppDelegate.currentVersion))"
+                    alert.addButton(withTitle: "Télécharger")
+                    alert.addButton(withTitle: "Plus tard")
+                    NSApp.activate(ignoringOtherApps: true)
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        if let url = URL(string: htmlURL) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                } else {
+                    self.showUpdateAlert(message: "Vous êtes à jour (v\(AppDelegate.currentVersion)).")
+                }
+            }
+        }.resume()
+    }
+
+    private func showUpdateAlert(message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Claude Monitor"
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+    }
 }
