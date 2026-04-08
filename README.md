@@ -20,6 +20,10 @@ A lightweight macOS menu bar app to monitor your Claude usage limits in real-tim
 
 Download the latest `.zip` from the [Releases](../../releases) page, extract, and drag `ClaudeMonitor.app` to your Applications folder.
 
+> **Note:** The app is not signed with an Apple Developer certificate. On first launch, macOS will block it. To open it:
+> 1. Right-click on `ClaudeMonitor.app` → **Open** → **Open**
+> 2. Or: go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**
+
 ### Build from source
 
 ```bash
