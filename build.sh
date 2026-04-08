@@ -14,8 +14,10 @@ echo "🔨 Building Claude Monitor..."
 rm -rf "$BUILD_DIR"
 mkdir -p "$MACOS_DIR"
 
-# Copy Info.plist
+# Copy Info.plist and icon
 cp "$SRC_DIR/Info.plist" "$CONTENTS_DIR/Info.plist"
+mkdir -p "$CONTENTS_DIR/Resources"
+cp "$SRC_DIR/AppIcon.icns" "$CONTENTS_DIR/Resources/AppIcon.icns"
 
 # Compile all Swift sources
 swiftc \
