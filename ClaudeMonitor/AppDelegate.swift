@@ -5,6 +5,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
     private var statusView: StatusItemView!
     private var popover: NSPopover!
     private var popoverView: PopoverView!
+    private var eventMonitor: Any?
     private var timer: Timer?
     private var statusTimer: Timer?
     private let config = Config.shared
@@ -84,6 +85,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
             if let button = statusItem.button {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             }
+
+            eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                self?.closePopover()
+            }
+        }
+    }
+
+    private func closePopover() {
+        popover.performClose(nil)
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
         }
     }
 
