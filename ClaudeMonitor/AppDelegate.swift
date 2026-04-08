@@ -124,9 +124,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopov
                 statusView.label = "SESSION"
                 statusView.value = String(format: "%.0f%%", pct)
             }
-            if pct >= 80 { statusView.valueColor = .systemRed }
-            else if pct >= 50 { statusView.valueColor = .systemOrange }
-            else { statusView.valueColor = .labelColor }
+            statusView.valueColor = .labelColor
         } else if lastError != nil {
             statusView.label = ""
             statusView.value = "CL!"
@@ -321,9 +319,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopov
         checkForUpdate()
     }
 
-    // MARK: - Update check
+    // MARK: - Auto-update
 
-    private static let currentVersion = "1.3.0"
+    private static let currentVersion = "1.4.0"
     private static let releasesAPI = "https://api.github.com/repos/etroadec/claude-monitor/releases/latest"
 
     private func checkForUpdate() {
@@ -336,7 +334,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopov
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let tagName = json["tag_name"] as? String else {
                 DispatchQueue.main.async {
-                    self.showUpdateAlert(message: "Impossible de vérifier les mises à jour.")
+                    self.showAlert("Impossible de vérifier les mises à jour.")
                 }
                 return
             }
@@ -344,28 +342,94 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopov
             let remoteVersion = tagName.trimmingCharacters(in: CharacterSet(charactersIn: "v"))
             let isNew = remoteVersion.compare(AppDelegate.currentVersion, options: .numeric) == .orderedDescending
 
+            guard isNew else {
+                DispatchQueue.main.async {
+                    self.showAlert("Vous êtes à jour (v\(AppDelegate.currentVersion)).")
+                }
+                return
+            }
+
+            // Find the .zip asset download URL
+            guard let assets = json["assets"] as? [[String: Any]],
+                  let zipAsset = assets.first(where: { ($0["name"] as? String)?.hasSuffix(".zip") == true }),
+                  let downloadURL = zipAsset["browser_download_url"] as? String else {
+                DispatchQueue.main.async {
+                    self.showAlert("Mise à jour v\(remoteVersion) disponible mais pas de téléchargement trouvé.")
+                }
+                return
+            }
+
             DispatchQueue.main.async {
-                if isNew {
-                    let htmlURL = json["html_url"] as? String ?? "https://github.com/etroadec/claude-monitor/releases/latest"
-                    let alert = NSAlert()
-                    alert.messageText = "Mise à jour disponible"
-                    alert.informativeText = "Version \(remoteVersion) disponible (actuelle: \(AppDelegate.currentVersion))"
-                    alert.addButton(withTitle: "Télécharger")
-                    alert.addButton(withTitle: "Plus tard")
-                    NSApp.activate(ignoringOtherApps: true)
-                    if alert.runModal() == .alertFirstButtonReturn {
-                        if let url = URL(string: htmlURL) {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                } else {
-                    self.showUpdateAlert(message: "Vous êtes à jour (v\(AppDelegate.currentVersion)).")
+                let alert = NSAlert()
+                alert.messageText = "Mise à jour v\(remoteVersion)"
+                alert.informativeText = "Installer automatiquement ? L'app va redémarrer."
+                alert.addButton(withTitle: "Installer")
+                alert.addButton(withTitle: "Plus tard")
+                NSApp.activate(ignoringOtherApps: true)
+                if alert.runModal() == .alertFirstButtonReturn {
+                    self.downloadAndInstall(urlString: downloadURL)
                 }
             }
         }.resume()
     }
 
-    private func showUpdateAlert(message: String) {
+    private func downloadAndInstall(urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+
+        let task = URLSession.shared.downloadTask(with: url) { tmpFile, _, error in
+            guard let tmpFile = tmpFile, error == nil else {
+                DispatchQueue.main.async { self.showAlert("Échec du téléchargement.") }
+                return
+            }
+
+            do {
+                let fm = FileManager.default
+                let tmpDir = fm.temporaryDirectory.appendingPathComponent("claude-monitor-update")
+                try? fm.removeItem(at: tmpDir)
+                try fm.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+
+                // Unzip
+                let zipPath = tmpDir.appendingPathComponent("update.zip")
+                try fm.moveItem(at: tmpFile, to: zipPath)
+
+                let unzipProcess = Process()
+                unzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+                unzipProcess.arguments = ["-xk", zipPath.path, tmpDir.path]
+                try unzipProcess.run()
+                unzipProcess.waitUntilExit()
+
+                // Find the .app in the unzipped contents
+                let contents = try fm.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil)
+                guard let newApp = contents.first(where: { $0.pathExtension == "app" }) else {
+                    DispatchQueue.main.async { self.showAlert("Mise à jour invalide.") }
+                    return
+                }
+
+                // Replace current app
+                let currentApp = Bundle.main.bundleURL
+                let backupURL = currentApp.deletingLastPathComponent().appendingPathComponent("ClaudeMonitor.app.bak")
+                try? fm.removeItem(at: backupURL)
+                try fm.moveItem(at: currentApp, to: backupURL)
+                try fm.copyItem(at: newApp, to: currentApp)
+                try? fm.removeItem(at: backupURL)
+                try? fm.removeItem(at: tmpDir)
+
+                // Relaunch
+                DispatchQueue.main.async {
+                    let relaunchProcess = Process()
+                    relaunchProcess.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+                    relaunchProcess.arguments = ["-n", currentApp.path]
+                    try? relaunchProcess.run()
+                    NSApp.terminate(nil)
+                }
+            } catch {
+                DispatchQueue.main.async { self.showAlert("Erreur: \(error.localizedDescription)") }
+            }
+        }
+        task.resume()
+    }
+
+    private func showAlert(_ message: String) {
         let alert = NSAlert()
         alert.messageText = "Claude Monitor"
         alert.informativeText = message
