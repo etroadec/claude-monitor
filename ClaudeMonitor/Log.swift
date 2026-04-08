@@ -1,16 +1,11 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.edgard.claude-monitor", category: "app")
 
 func debugLog(_ msg: String) {
-    let str = "\(Date()): \(msg)\n"
-    let path = "/tmp/claude-monitor-debug.log"
-    if let data = str.data(using: .utf8) {
-        if FileManager.default.fileExists(atPath: path) {
-            let handle = FileHandle(forWritingAtPath: path)!
-            handle.seekToEndOfFile()
-            handle.write(data)
-            handle.closeFile()
-        } else {
-            FileManager.default.createFile(atPath: path, contents: data)
-        }
-    }
+    #if DEBUG
+    logger.debug("\(msg, privacy: .public)")
+    #endif
+    // No file logging — tokens must never be written to disk
 }

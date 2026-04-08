@@ -104,8 +104,7 @@ class OAuthClient {
             }
 
             let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let bodyStr = data.flatMap { String(data: $0, encoding: .utf8) } ?? "nil"
-            debugLog("[OAuth] Token response \(httpStatus): \(bodyStr.prefix(200))")
+            debugLog("[OAuth] Token response: \(httpStatus)")
 
             guard let data = data,
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -123,7 +122,7 @@ class OAuthClient {
                 return
             }
 
-            debugLog("[OAuth] Got token: \(accessToken.prefix(20))...")
+            debugLog("[OAuth] Token obtained")
             let tokens = OAuthTokens(
                 accessToken: accessToken,
                 refreshToken: json["refresh_token"] as? String,

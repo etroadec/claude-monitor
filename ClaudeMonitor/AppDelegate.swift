@@ -1,6 +1,6 @@
 import Cocoa
 
-class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem!
     private var statusView: StatusItemView!
     private var popover: NSPopover!
@@ -19,6 +19,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
     private var incidents: [StatusIncident] = []
     private var hasUnreadIncidents = false
     private var lastSeenIncidentDate: Date?
+    private var refreshRetryCount = 0
+    private static let maxRefreshRetries = 2
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -53,6 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
         popover = NSPopover()
         popover.behavior = .transient
         popover.animates = true
+        popover.delegate = self
 
         let vc = NSViewController()
         popoverView = PopoverView(frame: NSRect(x: 0, y: 0, width: 280, height: 360))
@@ -162,25 +165,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
 
     private func refresh() {
         guard config.isConnected else { return }
+
+        // Proactively refresh token if expiring soon
+        if config.isTokenExpiringSoon && !config.refreshToken.isEmpty {
+            refreshTokenAndRetry()
+            return
+        }
+
         apiClient.fetchUsage(token: config.accessToken) { [weak self] result in
             DispatchQueue.main.async {
+                guard let self = self else { return }
                 switch result {
                 case .success(let info):
-                    self?.usageInfo = info
-                    self?.lastUpdated = Date()
-                    self?.lastError = nil
+                    self.usageInfo = info
+                    self.lastUpdated = Date()
+                    self.lastError = nil
+                    self.refreshRetryCount = 0
                 case .failure(let error):
-                    if case APIError.unauthorized = error, !Config.shared.refreshToken.isEmpty {
-                        self?.refreshTokenAndRetry()
+                    let canRetry = self.refreshRetryCount < AppDelegate.maxRefreshRetries
+                        && !Config.shared.refreshToken.isEmpty
+                    if case APIError.unauthorized = error, canRetry {
+                        self.refreshTokenAndRetry()
                         return
                     }
-                    if case APIError.rateLimited = error, !Config.shared.refreshToken.isEmpty {
-                        self?.refreshTokenAndRetry()
+                    if case APIError.rateLimited = error, canRetry {
+                        self.refreshTokenAndRetry()
                         return
                     }
-                    self?.lastError = error.localizedDescription
+                    self.lastError = error.localizedDescription
+                    self.refreshRetryCount = 0
                 }
-                self?.updateStatusBar()
+                self.updateStatusBar()
             }
         }
     }
@@ -208,6 +223,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
     }
 
     private func refreshTokenAndRetry() {
+        refreshRetryCount += 1
         OAuthClient.refreshAccessToken(config.refreshToken) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
@@ -215,6 +231,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
                     Config.shared.saveTokens(tokens)
                     self?.refresh()
                 case .failure:
+                    self?.refreshRetryCount = 0
                     self?.lastError = "Session expirée — reconnectez-vous"
                     self?.updateStatusBar()
                 }
@@ -280,7 +297,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
 
     // MARK: - Update check
 
-    private static let currentVersion = "1.2.0"
+    private static let currentVersion = "1.3.0"
     private static let releasesAPI = "https://api.github.com/repos/etroadec/claude-monitor/releases/latest"
 
     private func checkForUpdate() {
@@ -329,5 +346,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
         alert.addButton(withTitle: "OK")
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
+    }
+
+    // MARK: - NSPopoverDelegate
+
+    func popoverDidClose(_ notification: Notification) {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
     }
 }

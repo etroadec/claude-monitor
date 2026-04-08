@@ -1,12 +1,15 @@
 import Foundation
 
-/// Minimal HTTP server on localhost to receive the OAuth callback
 class LocalHTTPServer {
     private var serverSocket: Int32 = -1
-    private var running = false
+    private let queue = DispatchQueue(label: "com.edgard.claude-monitor.httpserver")
+    private var _running = false
+    private var running: Bool {
+        get { queue.sync { _running } }
+        set { queue.sync { _running = newValue } }
+    }
     private var handler: ((String?, String?) -> Void)?
 
-    /// Start the server on a random available port. Returns the port number.
     func start(handler: @escaping (String?, String?) -> Void) -> UInt16? {
         self.handler = handler
 
@@ -18,7 +21,7 @@ class LocalHTTPServer {
 
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = 0 // Let the OS pick a port
+        addr.sin_port = 0
         addr.sin_addr.s_addr = inet_addr("127.0.0.1")
 
         let bindResult = withUnsafePointer(to: &addr) { ptr in
@@ -37,10 +40,9 @@ class LocalHTTPServer {
             return nil
         }
 
-        // Get the assigned port
         var boundAddr = sockaddr_in()
         var addrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-        withUnsafeMutablePointer(to: &boundAddr) { ptr in
+        _ = withUnsafeMutablePointer(to: &boundAddr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
                 getsockname(serverSocket, sockaddrPtr, &addrLen)
             }
@@ -57,10 +59,9 @@ class LocalHTTPServer {
 
     func stop() {
         running = false
-        if serverSocket >= 0 {
-            close(serverSocket)
-            serverSocket = -1
-        }
+        let sock = serverSocket
+        serverSocket = -1
+        if sock >= 0 { close(sock) }
     }
 
     private func acceptLoop() {
@@ -73,9 +74,8 @@ class LocalHTTPServer {
                 }
             }
 
-            guard clientSocket >= 0 else { break }
+            guard clientSocket >= 0, running else { break }
 
-            // Read the HTTP request
             var buffer = [UInt8](repeating: 0, count: 4096)
             let bytesRead = read(clientSocket, &buffer, buffer.count)
             guard bytesRead > 0 else {
@@ -84,19 +84,17 @@ class LocalHTTPServer {
             }
 
             let requestString = String(bytes: buffer[0..<bytesRead], encoding: .utf8) ?? ""
-
-            // Parse the request path
             let (code, state) = parseCallback(from: requestString)
 
-            // Send response
+            let success = code != nil
             let html = """
             <!DOCTYPE html>
             <html>
             <head><meta charset="utf-8"><title>Claude Monitor</title></head>
             <body style="font-family:-apple-system,system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#1a1a2e;color:#e0e0e0">
             <div style="text-align:center">
-            <h1 style="font-size:2em">\(code != nil ? "✓ Connecté !" : "✗ Erreur")</h1>
-            <p style="color:#888">\(code != nil ? "Vous pouvez fermer cette fenêtre." : "Aucun code reçu. Réessayez.")</p>
+            <h1 style="font-size:2em">\(success ? "&#x2713; Connect&eacute; !" : "&#x2717; Erreur")</h1>
+            <p style="color:#888">\(success ? "Vous pouvez fermer cette fen&ecirc;tre." : "Aucun code re&ccedil;u. R&eacute;essayez.")</p>
             </div>
             </body>
             </html>
@@ -107,7 +105,6 @@ class LocalHTTPServer {
             }
             close(clientSocket)
 
-            // Notify handler on main thread
             if code != nil {
                 running = false
                 DispatchQueue.main.async { [weak self] in
@@ -119,13 +116,11 @@ class LocalHTTPServer {
     }
 
     private func parseCallback(from request: String) -> (code: String?, state: String?) {
-        // Parse "GET /callback?code=xxx&state=yyy HTTP/1.1"
         guard let firstLine = request.components(separatedBy: "\r\n").first,
               let pathPart = firstLine.split(separator: " ").dropFirst().first,
               let components = URLComponents(string: String(pathPart)) else {
             return (nil, nil)
         }
-
         let code = components.queryItems?.first(where: { $0.name == "code" })?.value
         let state = components.queryItems?.first(where: { $0.name == "state" })?.value
         return (code, state)

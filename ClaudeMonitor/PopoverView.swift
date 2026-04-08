@@ -232,6 +232,11 @@ class LinkButton: NSButton {
 
 class UsageTabView: NSView {
     private var labels: [NSTextField] = []
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss"
+        return f
+    }()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -278,9 +283,7 @@ class UsageTabView: NSView {
 
         if let updated = lastUpdated {
             y -= 12
-            let fmt = DateFormatter()
-            fmt.dateFormat = "HH:mm:ss"
-            addLabel("Mis à jour: \(fmt.string(from: updated))", color: .tertiaryLabelColor, bold: false, size: 10, y: y - 14)
+            addLabel("Mis à jour: \(UsageTabView.timeFormatter.string(from: updated))", color: .tertiaryLabelColor, bold: false, size: 10, y: y - 14)
         }
     }
 
@@ -342,6 +345,12 @@ class UsageTabView: NSView {
 class NotifTabView: NSView {
     private var labels: [NSView] = []
     var onIncidentClick: ((String) -> Void)?
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "dd MMM HH:mm"
+        f.locale = Locale(identifier: "fr_FR")
+        return f
+    }()
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -385,12 +394,8 @@ class NotifTabView: NSView {
     func layoutAll() {}
 
     private func addIncidentRow(_ incident: StatusIncident, y: CGFloat) -> CGFloat {
-        let fmt = DateFormatter()
-        fmt.dateFormat = "dd MMM HH:mm"
-        fmt.locale = Locale(identifier: "fr_FR")
-
         // Date
-        let dateLbl = NSTextField(labelWithString: fmt.string(from: incident.date))
+        let dateLbl = NSTextField(labelWithString: NotifTabView.dateFormatter.string(from: incident.date))
         dateLbl.font = .systemFont(ofSize: 10)
         dateLbl.textColor = .tertiaryLabelColor
         dateLbl.frame = NSRect(x: 14, y: y - 14, width: bounds.width - 28, height: 14)

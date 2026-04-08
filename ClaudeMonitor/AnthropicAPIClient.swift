@@ -48,8 +48,7 @@ class AnthropicAPIClient {
             }
 
             let httpStatus = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let bodyStr = data.flatMap { String(data: $0, encoding: .utf8) } ?? "nil"
-            debugLog("[API] Response \(httpStatus): \(bodyStr.prefix(500))")
+            debugLog("[API] Response: \(httpStatus)")
 
             if httpStatus == 401 || httpStatus == 403 {
                 completion(.failure(APIError.unauthorized))
