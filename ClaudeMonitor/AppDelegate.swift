@@ -95,14 +95,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
         if !connected {
             statusView.label = ""
             statusView.value = "CL"
-            statusView.valueColor = .white
+            statusView.valueColor = .labelColor
         } else if let info = usageInfo {
             let pct = info.fiveHour.utilization
             statusView.label = "SESSION"
             statusView.value = String(format: "%.0f%%", pct)
             if pct >= 80 { statusView.valueColor = .systemRed }
             else if pct >= 50 { statusView.valueColor = .systemOrange }
-            else { statusView.valueColor = .white }
+            else { statusView.valueColor = .labelColor }
         } else if lastError != nil {
             statusView.label = ""
             statusView.value = "CL!"
@@ -110,7 +110,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate {
         } else {
             statusView.label = ""
             statusView.value = "CL"
-            statusView.valueColor = .white
+            statusView.valueColor = .labelColor
         }
 
         statusView.showBadge = hasUnreadIncidents

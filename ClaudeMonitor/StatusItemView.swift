@@ -3,10 +3,10 @@ import Cocoa
 class StatusItemView: NSView {
     var label: String = "" { didSet { needsDisplay = true } }
     var value: String = "CL" { didSet { needsDisplay = true } }
-    var valueColor: NSColor = .white { didSet { needsDisplay = true } }
+    var valueColor: NSColor = .labelColor { didSet { needsDisplay = true } }
     var showBadge: Bool = false { didSet { needsDisplay = true; invalidateIntrinsicContentSize() } }
 
-    private let labelFont = NSFont.systemFont(ofSize: 6, weight: .regular)
+    private let labelFont = NSFont.systemFont(ofSize: 7, weight: .regular)
     private let valueFont = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
 
     override var intrinsicContentSize: NSSize {
@@ -28,7 +28,7 @@ class StatusItemView: NSView {
         } else {
             let labelAttrs: [NSAttributedString.Key: Any] = [
                 .font: labelFont,
-                .foregroundColor: NSColor.white,
+                .foregroundColor: NSColor.labelColor,
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
                 .font: valueFont,
@@ -38,7 +38,7 @@ class StatusItemView: NSView {
             let labelSize = (label as NSString).size(withAttributes: labelAttrs)
             let valueSize = (value as NSString).size(withAttributes: valueAttrs)
 
-            let spacing: CGFloat = -2
+            let spacing: CGFloat = -3
             let totalH = labelSize.height + valueSize.height + spacing
             let baseY = (h - totalH) / 2
 
@@ -46,7 +46,6 @@ class StatusItemView: NSView {
             let labelY = baseY + valueSize.height + spacing
             (label as NSString).draw(at: NSPoint(x: 0, y: labelY), withAttributes: labelAttrs)
 
-            // Badge dot: at the end of the SESSION label line
             if showBadge {
                 let dotSize: CGFloat = 4
                 let dotX = labelSize.width + 2
