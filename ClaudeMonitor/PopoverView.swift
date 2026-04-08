@@ -19,11 +19,12 @@ class PopoverView: NSView {
     private var usageView: UsageTabView!
     private var notifView: NotifTabView!
     private let bottomBar = NSView()
-    private let refreshBtn = LinkButton(title: "Rafraîchir")
-    private let updateBtn = LinkButton(title: "Mise à jour")
-    private let disconnectBtn = LinkButton(title: "Déconnecter")
-    private let connectBtn = LinkButton(title: "Connecter mon compte Claude")
-    private let quitBtn = LinkButton(title: "Quitter")
+    private let bottomSeparator = NSView()
+    private let refreshBtn = FooterButton(title: "Rafraîchir")
+    private let updateBtn = FooterButton(title: "Mise à jour")
+    private let disconnectBtn = FooterButton(title: "Déconnecter")
+    private let connectBtn = FooterButton(title: "Connecter")
+    private let quitBtn = FooterButton(title: "Quitter")
     private let badgeDot = NSView()
 
     var isConnected = false { didSet { layoutAll() } }
@@ -82,6 +83,10 @@ class PopoverView: NSView {
         quitBtn.target = self
         quitBtn.action = #selector(quitClicked)
 
+        bottomSeparator.wantsLayer = true
+        bottomSeparator.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        addSubview(bottomSeparator)
+
         bottomBar.addSubview(refreshBtn)
         bottomBar.addSubview(updateBtn)
         bottomBar.addSubview(disconnectBtn)
@@ -95,8 +100,7 @@ class PopoverView: NSView {
         let w = bounds.width
         let topPad: CGFloat = 6
         let tabH: CGFloat = 28
-        let bottomH: CGFloat = 24
-        let sep: CGFloat = 1
+        let bottomH: CGFloat = 32
 
         // Tabs (with top padding)
         let tabY = bounds.height - topPad - tabH
@@ -105,9 +109,12 @@ class PopoverView: NSView {
         tabNotif.frame = NSRect(x: tabW, y: tabY, width: tabW, height: tabH)
         badgeDot.frame = NSRect(x: tabW + tabNotif.titleSize.width / 2 + tabW / 2 + 4, y: tabY + tabH / 2 + 4, width: 6, height: 6)
 
+        // Separator line
+        bottomSeparator.frame = NSRect(x: 0, y: bottomH, width: w, height: 1)
+
         // Content
-        let contentY = bottomH + sep
-        let contentH = tabY - sep - contentY
+        let contentY = bottomH + 1
+        let contentH = tabY - 1 - contentY
         contentContainer.frame = NSRect(x: 0, y: contentY, width: w, height: contentH)
         usageView.frame = contentContainer.bounds
         notifView.frame = contentContainer.bounds
@@ -127,17 +134,35 @@ class PopoverView: NSView {
     private func layoutBottomBar() {
         let h = bottomBar.bounds.height
         let w = bottomBar.bounds.width
-        let y: CGFloat = (h - 16) / 2
 
-        // Evenly space all visible buttons
-        let allBtns = [refreshBtn, updateBtn, connectBtn, disconnectBtn, quitBtn].filter { !$0.isHidden }
-        for btn in allBtns { btn.sizeToFit() }
-        let totalW = allBtns.reduce(CGFloat(0)) { $0 + $1.frame.width }
-        let spacing = (w - totalW - 24) / max(CGFloat(allBtns.count - 1), 1)
-        var x: CGFloat = 12
-        for btn in allBtns {
+        // Build visible buttons with dot separators
+        let allBtns: [FooterButton] = [refreshBtn, updateBtn, connectBtn, disconnectBtn, quitBtn]
+        let visibleBtns = allBtns.filter { !$0.isHidden }
+        for btn in visibleBtns { btn.sizeToFit() }
+
+        let dotWidth: CGFloat = 8
+        let totalW = visibleBtns.reduce(CGFloat(0)) { $0 + $1.frame.width }
+            + CGFloat(max(visibleBtns.count - 1, 0)) * dotWidth
+        var x = (w - totalW) / 2
+        let y = (h - 16) / 2
+
+        // Remove old dot separators
+        bottomBar.subviews.filter { $0.tag == 999 }.forEach { $0.removeFromSuperview() }
+
+        for (i, btn) in visibleBtns.enumerated() {
             btn.frame.origin = NSPoint(x: x, y: y)
-            x += btn.frame.width + spacing
+            x += btn.frame.width
+
+            if i < visibleBtns.count - 1 {
+                let dot = NSTextField(labelWithString: "·")
+                dot.font = .systemFont(ofSize: 11)
+                dot.textColor = .tertiaryLabelColor
+                dot.tag = 999
+                dot.sizeToFit()
+                dot.frame.origin = NSPoint(x: x + (dotWidth - dot.frame.width) / 2, y: y)
+                bottomBar.addSubview(dot)
+                x += dotWidth
+            }
         }
     }
 
@@ -211,16 +236,34 @@ class TabButton: NSButton {
     }
 }
 
-// MARK: - Link Button
+// MARK: - Footer Button
 
-class LinkButton: NSButton {
+class FooterButton: NSButton {
+    private var isHovering = false
+
     convenience init(title: String) {
         self.init(frame: .zero)
         self.isBordered = false
-        self.attributedTitle = NSAttributedString(string: title, attributes: [
+        self.setButtonType(.momentaryChange)
+        updateTitle(title, hover: false)
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+
+    private func updateTitle(_ text: String, hover: Bool) {
+        self.attributedTitle = NSAttributedString(string: text, attributes: [
             .font: NSFont.systemFont(ofSize: 11),
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: hover ? NSColor.white : NSColor.tertiaryLabelColor,
         ])
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        isHovering = true
+        updateTitle(title, hover: true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovering = false
+        updateTitle(title, hover: false)
     }
 
     override func resetCursorRects() {

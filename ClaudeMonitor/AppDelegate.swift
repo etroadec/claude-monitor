@@ -21,6 +21,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopov
     private var lastSeenIncidentDate: Date?
     private var refreshRetryCount = 0
     private static let maxRefreshRetries = 2
+    private var showTimeRemaining = false
+    private var alternateTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -28,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopov
         updateStatusBar()
         fetchStatusFeed()
         startStatusPolling()
+        startAlternating()
         if config.isConnected {
             startPolling()
             refresh()
@@ -114,8 +117,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopov
             statusView.valueColor = .labelColor
         } else if let info = usageInfo {
             let pct = info.fiveHour.utilization
-            statusView.label = "SESSION"
-            statusView.value = String(format: "%.0f%%", pct)
+            if showTimeRemaining, let reset = info.fiveHour.resetsAt {
+                statusView.label = "RESET"
+                statusView.value = formatTimeRemaining(until: reset)
+            } else {
+                statusView.label = "SESSION"
+                statusView.value = String(format: "%.0f%%", pct)
+            }
             if pct >= 80 { statusView.valueColor = .systemRed }
             else if pct >= 50 { statusView.valueColor = .systemOrange }
             else { statusView.valueColor = .labelColor }
@@ -161,6 +169,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, PopoverViewDelegate, NSPopov
     private func stopPolling() {
         timer?.invalidate()
         timer = nil
+    }
+
+    private func startAlternating() {
+        alternateTimer?.invalidate()
+        alternateTimer = Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { [weak self] _ in
+            guard let self = self, self.usageInfo != nil else { return }
+            self.showTimeRemaining.toggle()
+            self.updateStatusBar()
+        }
+    }
+
+    private func formatTimeRemaining(until date: Date) -> String {
+        let remaining = date.timeIntervalSinceNow
+        if remaining <= 0 { return "0m" }
+        let hours = Int(remaining) / 3600
+        let minutes = (Int(remaining) % 3600) / 60
+        if hours > 0 { return "\(hours)h\(String(format: "%02d", minutes))" }
+        return "\(minutes)m"
     }
 
     private func refresh() {
